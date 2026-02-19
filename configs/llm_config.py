@@ -7,7 +7,7 @@ class LLMConfig:
     # Model architecture (~1.5B Params)
     d_model: int = 2048       
     n_heads: int = 16         # d_k = 128
-    n_layers: int = 32
+    n_layers: int = 12
     d_ff: int = 8192         
     
     # GQA parameters

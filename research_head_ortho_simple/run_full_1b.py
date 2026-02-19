@@ -27,9 +27,9 @@ from train_llm import prepare_datasets
 # ============================================================
 # Configuration
 # ============================================================
-TARGET_TOKENS = 1_000_000_000
-PROBE_EVERY_STEPS = 100      # Probe every 100 steps (~13M tokens)
-BATCH_SIZE = 16
+TARGET_TOKENS = 300_000_000
+PROBE_EVERY_STEPS = 100      # Probe every 100 steps
+BATCH_SIZE = 32
 GRAD_ACCUM = 4               # Effective batch = 16 * 4 * 2048 = 131,072 tokens
 SEED = 42
 DATASET_PATH = "processed_data/pretrain_1B"

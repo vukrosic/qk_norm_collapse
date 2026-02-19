@@ -5,6 +5,15 @@ This document outlines the experimental setup used to investigate how different 
 
 ---
 
+To understand these ablations intuitively, you have to look at what the Muon optimizer is fundamentally doing. Muon takes a matrix of gradients and forces its rows to be orthogonal (mathematically perpendicular, meaning they are independent and non-overlapping).
+
+By reshaping the gradient tensor before giving it to Muon, we are changing the definition of a "row." Therefore, we are changing who is forced to be independent from whom.
+
+
+
+
+
+
 ## 1. Methodology: Three Modes of Orthogonality
 
 We investigate how the shape of the gradient tensor $G$ during the Newton-Schulz iteration affects the learning dynamics of the Key/Query projections ($W_{QK} \in \mathbb{R}^{H \cdot d_k \times d_{model}}$).
