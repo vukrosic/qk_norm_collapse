@@ -4,39 +4,34 @@ from typing import Optional, Tuple
 
 @dataclass
 class LLMConfig:
-    # Model architecture (88M Params)
-    d_model: int = 512       
-    n_heads: int = 8         
-    n_layers: int = 22
-    d_ff: int = 2048         
+    # Model architecture (~1.5B Params)
+    d_model: int = 2048       
+    n_heads: int = 16         # d_k = 128
+    n_layers: int = 32
+    d_ff: int = 8192         
     
     # GQA parameters
-    n_kv_heads: int = 4      
+    n_kv_heads: int = 8      
     
     # Data params
-    # ⚠️ WARNING: For simplicity, I recomend not changing max_seq_len
-    # If you change max_seq_len, you MUST re-run data preparation!
-    # The data preparation script chunks data at this exact length, and the RoPE
-    # cache is initialized with this value. Mismatches will cause runtime errors.
-    # Run: python data/prepare_mix_data.py --target_tokens 25_000_000
-    # you may change the number of tokens
-    max_seq_len: int = 2048  # check the warning above
+    # WARNING: If you change max_seq_len, you MUST re-run data preparation!
+    max_seq_len: int = 2048
     vocab_size: int = 49152  
-    use_qk_norm: bool = True # NEW: Control rank collapse ablation
-    use_muon: bool = True    # NEW: Control optimizer ablation
+    use_qk_norm: bool = True
+    use_muon: bool = True
     
-    # Base Training Defaults
+    # Training
     compile_model: bool = True
-    batch_size: int = 4
-    gradient_accumulation_steps: int = 1
-    train_tokens: int = 8000000
+    batch_size: int = 1
+    gradient_accumulation_steps: int = 8
+    train_tokens: int = 20000000  # 20M tokens
     
-    # Learning Rate (Aggressive for pre-training)
-    muon_lr: float = 0.024
+    # Learning Rate
+    muon_lr: float = 0.012
     muon_momentum: float = 0.95
-    adamw_lr: float = 0.006
-    warmup_ratio: float = 0.0
-    schedule_type: str = "constant"
+    adamw_lr: float = 0.003
+    warmup_ratio: float = 0.01
+    schedule_type: str = "cosine"
 
     # Evaluation
     eval_every: Optional[int] = None
@@ -55,4 +50,3 @@ class LLMConfig:
     def __post_init__(self):
         self.d_k = self.d_model // self.n_heads
         assert self.d_model % self.n_heads == 0, "d_model must be divisible by n_heads"
-

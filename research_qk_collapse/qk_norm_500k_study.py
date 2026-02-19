@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader
 sys.path.append(os.getcwd())
 
 from models.llm import MinimalLLM
-from configs.llm_config_1b import LLMConfig1B
+from configs.llm_config import LLMConfig
 from training.trainer import setup_muon_optimizer
 from research.svd_probe import RankProbe, compute_rank_metrics
 from data.loader import setup_tokenizer
@@ -59,7 +59,7 @@ def run_experiment(use_qk_norm: bool) -> dict:
     print(f"{'='*70}")
 
     # ---- Config ----
-    config = LLMConfig1B()
+    config = LLMConfig()
     config.use_qk_norm = use_qk_norm
     config.train_tokens = TARGET_TOKENS
     config.batch_size = BATCH_SIZE

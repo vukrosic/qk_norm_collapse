@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from models.llm import MinimalLLM
-from configs.llm_config_1b import LLMConfig1B
+from configs.llm_config import LLMConfig
 from training.trainer import setup_muon_optimizer
 from research.svd_probe import RankProbe
 from data.loader import setup_tokenizer
@@ -43,7 +43,7 @@ def run(use_qk_norm, freeze_gamma=False):
     tag = "QK_frozen" if freeze_gamma else ("QK" if use_qk_norm else "NoQK")
     print(f"\n{'='*60}\n  RUN: {tag}\n{'='*60}")
 
-    config = LLMConfig1B()
+    config = LLMConfig()
     config.use_qk_norm = use_qk_norm
     config.train_tokens = TARGET_TOKENS
     config.batch_size = BATCH_SIZE
