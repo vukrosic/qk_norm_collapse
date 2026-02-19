@@ -22,12 +22,13 @@ class LLMConfig:
     
     # Training
     compile_model: bool = True
-    batch_size: int = 1
-    gradient_accumulation_steps: int = 8
-    train_tokens: int = 20000000  # 20M tokens
+    gradient_checkpointing: bool = True
+    batch_size: int = 16
+    gradient_accumulation_steps: int = 1
+    train_tokens: int = 100000000  # 100M tokens
     
     # Learning Rate
-    muon_lr: float = 0.012
+    muon_lr: float = 0.02  # Slight increase for larger batch
     muon_momentum: float = 0.95
     adamw_lr: float = 0.003
     warmup_ratio: float = 0.01
