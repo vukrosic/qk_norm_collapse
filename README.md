@@ -2,8 +2,8 @@
 
 We train a **1.5B parameter** LLM under three QK-Norm conditions for **~50M tokens** each and measure how the learned γ parameter vs. normalization affects dimensional collapse (Participation Ratio) in attention key vectors.
 
-**→ Full write-up & easy explanations: [`research/paper.md`](research/paper.md)**  
-**→ PDF Version: [`English`](research/paper.pdf) | [`Chinese`](research/paper-ch.pdf)**
+**→ Full write-up & easy explanations: [`research_qk_collapse/paper.md`](research_qk_collapse/paper.md)**  
+**→ PDF Version: [`English`](research_qk_collapse/paper.pdf) | [`Chinese`](research_qk_collapse/paper-ch.pdf)**
 
 | Condition | Final PR (↑) | Train Loss (↓) |
 |:---|:---:|:---:|
@@ -61,7 +61,7 @@ This downloads the dataset from HuggingFace, tokenizes it, and saves to `process
 ### 3. Run the Experiment
 
 ```bash
-python research/qk_norm_25m_study.py
+python research_qk_collapse/qk_norm_25m_study.py
 ```
 
 This trains 3 models sequentially (~2-3 hours on H100), probes PR every ~2M tokens, and saves results + plots to `research_results/qk_norm_50m_study/`.
@@ -85,7 +85,7 @@ research_results/qk_norm_50m_study/
 └── 2_key_pr_causal.png      # PR trajectory (main figure)
 ```
 
-To regenerate plots from existing results: `python research/split_panels.py`
+To regenerate plots from existing results: `python research_qk_collapse/split_panels.py`
 
 ---
 
