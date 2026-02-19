@@ -1,0 +1,15 @@
+# QK-Norm Might Worsen Muon Optimizer LLM Training
+
+Each attention head in a transformer uses a 128-dimensional space to represent tokens. Ideally, the model spreads its representations across all 128 dimensions. In practice, many dimensions shrink to near-zero variance - the model "collapses" into a lower-dimensional subspace.
+
+QK-Norm is a technique that does two things to the attention vectors: (1) it normalizes them, and (2) it multiplies each dimension by a learnable weight called gamma.
+
+We trained a 1.5B parameter language model three times to see what happens. Here is what we found:
+
+1. The gamma knobs - not the normalization - appear to control how many dimensions carry variance. Locking the gamma knobs makes the model worse than not normalizing in this single-seed experiment.
+
+2. But normalization - not gamma - is what makes the model learn better. Both normalized models achieve nearly identical loss, and both beat the no-QK-Norm model.
+
+3. Every model goes through the same collapse-then-recovery pattern. All three start with ~87 dimensions in use, crash to ~51–55, then recover.
+
+4. We cannot link PR (Participation Ratio) to model quality. The model with the fewest active dimensions achieves the best loss. Higher PR does not mean a better model in our experiment.
