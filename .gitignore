@@ -242,3 +242,6 @@ logs_debug/
 
 # GitHub App credentials
 gha-creds-*.json
+# LaTeX build files
+*.aux
+*.out
