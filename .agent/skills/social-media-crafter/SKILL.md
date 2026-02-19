@@ -12,4 +12,4 @@ You can use explanations from there, focus on explaining it in the same way, you
 
 Make it not so short.
 
-Do it in english, make a txt file, and then translate the txt file to chinese file as well, focus on keeping the same style andn tone of speech.
+Do it in english, make a txt file, and then translate the txt file to chinese file as well, focus on keeping the same style andn tone of speech. Chinese version should have short title but it should describe the content well and accurately.
