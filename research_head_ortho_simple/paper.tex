@@ -1,0 +1,317 @@
+\documentclass[12pt]{article}
+\usepackage{fontspec}
+\setmainfont{Arial}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{pagecolor}
+\usepackage{tabularx}
+\usepackage[colorlinks=true, linkcolor=cyan, citecolor=cyan, filecolor=cyan, urlcolor=cyan]{hyperref}
+
+\geometry{margin=1.2in}
+\setstretch{1.15}
+\setcounter{secnumdepth}{0}
+
+% Dark mode configuration
+\definecolor{darkbg}{HTML}{1E1E1E}
+\definecolor{lighttext}{HTML}{D4D4D4}
+\pagecolor{darkbg}
+\color{lighttext}
+
+\title{\vspace{-2em}\textbf{Wasted LLM training compute = better loss?}}
+\author{Vuk Rosić \\ \small \raisebox{-0.2\height}{\includegraphics[width=0.02\textwidth]{/Users/vukrosic/AI Science Projects/AI Blog Writing/.agent/skills/md-to-pdf/github.jpg}} \texttt{vukrosic}}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{center}
+\includegraphics[width=\textwidth]{results_1b/comparison_300m_tokens.png}
+\end{center}
+
+These results may be used to speed up LLM pretraining with optimal orthogonalization constraints.
+
+Mainly - the more you force parts of LLM to be orthogonal, the slower it learns early, but faster later.
+
+Less orthogonalization makes more dimensions collapse to near 0, which makes loss go down faster early but is a bottleneck later in the training.
+
+I ran 3 LLM training experiments testing different orthogonal constraints via the Muon optimizer. Muon works by forcing gradient matrix rows to be orthogonal (independent). By reshaping the gradient tensor before feeding it to Muon, we redefine what a ``row'' is, controlling \textit{what} must be independent from \textit{what}.
+
+I applied these constraints to the Query and Key projections ($W_Q$ and $W_K$) of a $\sim$650M parameter LLM.
+
+Here are the 3 setups I compared:
+\begin{enumerate}
+    \item \textbf{Standard Muon (Baseline)}: Global orthogonality. Every single dimension of every single head must be independent from everything else. Maximum forced diversity.
+    \item \textbf{Mode 1 (Input-Shared / HeadOrtho)}: Shared subspace. It forces the $i$-th feature dimension to be independent from the $j$-th feature dimension, but it allows identically-indexed features in \textit{different heads} to be exactly the same. Heads can naturally align and collaborate.
+    \item \textbf{Mode 3 (Inter-Head)}: Independent heads. Head 1 as a whole must be orthogonal to Head 2 as a whole. However, the features \textit{within} a single head are free to be perfectly correlated.
+\end{enumerate}
+
+Find more detailed explanation below.
+
+\subsection*{The Results}
+
+I tracked the Training Loss and the Participation Ratio (PR), which is a way to measure the ``effective rank'' of the Query and Key projection matrices. If PR stays high, the matrix is fully utilizing its diverse capacity (a lot of dimensions are away from 0). If PR drops, it means the representations are collapsing and correlating (some dimensions are close to 0).
+
+We trained for 300 million tokens. \textit{(Note: This is too short for a full LLM, but provides strong initial signals while we scale up compute)}.
+
+\subsubsection*{Quantitative Results at 300M Tokens}
+
+\begin{table}[h]
+\centering
+\color{lighttext}
+\begin{tabularx}{\textwidth}{l X X X}
+\toprule
+Metric & \textbf{Mode 1 (Input-Shared)} & \textbf{Mode 3 (Inter-Head)} & \textbf{Baseline (Standard Muon)} \\
+\midrule
+\textbf{Final Train Loss} & \textbf{3.073} & 3.100 & 3.096 \\
+\textbf{Final PR} & 31.6 & 26.1 & \textbf{57.2} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection*{What the Graphs and Table Tell Us}
+
+\noindent\begin{minipage}{\linewidth}
+If we analyze the data above, a few very clear (and somewhat deeply weird) behaviors emerge:
+
+\begin{center}
+\includegraphics[width=0.9\textwidth]{results_1b/trajectory_loss_vs_pr.png}
+\end{center}
+\textit{This trajectory plot tracks the path of each mode from Start to End. Notice how the Baseline (cyan) descends in loss while slowly bleeding its Participation Ratio (PR). In contrast, Mode 1 (orange) undergoes a sudden rank collapse early on, but its PR begins to slowly recover and drift rightward as it achieves a lower overall loss. Longer training is required (we are dealing with more compute right now)}
+\end{minipage}
+\vspace{1em}
+
+\noindent\begin{minipage}{\linewidth}
+\textbf{1. Muon is Very Good at Keeping Rank High (Forced Diversity)}
+
+\vspace{1em}
+\begin{center}
+\includegraphics[width=0.9\textwidth]{results_1b/pr_log_scale.png}
+\end{center}
+\end{minipage}
+
+\begin{itemize}
+    \item The \textbf{Baseline (cyan squares)} aggressively fights the model's natural tendency to simplify. By enforcing strict, massive-scale orthogonality across everything, standard Muon proves it is incredibly good at keeping the Participation Ratio high ($\sim$57.2). However, it is not perfectly preserved - over time, even the Baseline shows a slow, ongoing decay in rank.
+    \item By comparison, when we relax the constraints within the heads (Mode 1 and Mode 3 have less orthogonality requirements), the model happily throws away its diversity early on and experiences a massive rank collapse. But after the initial crash, their PRs begin to slowly climb and actively improve towards the end of our training window. More training is required to see where those PRs would end up.
+\end{itemize}
+
+\noindent\begin{minipage}{\linewidth}
+\textbf{2. Collapsed Heads Give Better Loss early, but seems like baseline is catching up!}
+
+\vspace{1em}
+\begin{center}
+\includegraphics[width=0.9\textwidth]{results_1b/loss_difference_relative.png}
+\end{center}
+\end{minipage}
+
+\begin{itemize}
+    \item Despite undergoing a massive early rank collapse, \textbf{Mode 1 descends the fastest initially} and currently holds the lowest training loss (3.073).
+    \item However, while Mode 1 took an early lead, the Baseline's enforced diversity appears to be paying off. The loss difference between Mode 1 and Baseline peaked around -0.16, but has been shrinking since.
+\end{itemize}
+
+\vspace{1em}
+
+\section*{Head Orthogonality in Muon Optimization: Experimental Setup}
+
+\subsection*{Technical Details: Experimental Setup \& Methodology}
+
+\textit{(This section details the mathematical structures underlying the three modes summarized above).}
+
+To understand these ablations mathematically, we look at how rearranging the gradient tensor $G$ before Muon's inherent row-orthogonalization impacts what parameters are forced to be independent.
+
+\subsection*{1. Methodology: Three Modes of Orthogonality}
+
+We investigate how the shape of the gradient tensor $G$ during the Newton-Schulz iteration affects the learning dynamics of the Key/Query projections ($W_{QK} \in \mathbb{R}^{H \cdot d_k \times d_{model}}$).
+
+\subsubsection*{Summary of Dimensional Constraints}
+
+The core difference lies in which components are forced into the same ``row'' (and thus forced to be orthogonal to others) vs. being in the same ``vector'' (and thus allowed to align).
+
+\begin{table}[h]
+\centering
+\color{lighttext}
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+Mode & Reshape Target & Hierarchy of Ortho & Effective Constraint \\
+\midrule
+\textbf{Baseline} & $(H \cdot d_k) \times d_{model}$ & Everything $\perp$ Everything & \textbf{Hardest constraint.} Max head diversity. \\
+\textbf{Mode 1} & $d_k \times (H \cdot d_{model})$ & Row-Index $\perp$ Row-Index & \textbf{Shared subspace.} Heads horiz. stacked. \\
+\textbf{Mode 3} & $H \times (d_k \cdot d_{model})$ & Head $\perp$ Head & \textbf{Independent heads.} Rows within align. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{itemize}
+    \item \textbf{Baseline} says: ``Every single row (parameter vector) of every single head's weight projection matrix must be unique and orthogonal to all others.''
+    \item \textbf{Mode 1} says: ``The $i$-th row of Head 1 and the $i$-th row of Head 2 are part of the same long vector. They must be orthogonal to any $j$-th row ($i \neq j$), but Head 1 and Head 2 can use the same weights for the $i$-th dimension.''
+    \item \textbf{Mode 3} says: ``Head 1 as a whole (all its rows combined) must be orthogonal to Head 2 as a whole. Unlike the baseline, it doesn't care if rows \textit{within} Head 1 are similar, only that the `Head 1 subspace' is orthogonal to `Head 2 subspace'.''
+\end{itemize}
+
+\subsubsection*{1.1 Baseline: Global Matrix Orthogonality}
+\textbf{Standard Muon} treats the entire parameter matrix as a single 2D tensor.
+$$G_{\text{base}} \in \mathbb{R}^{(H \cdot d_k) \times d_{model}}$$
+where:
+\begin{itemize}
+    \item $H$ is the number of attention heads (e.g., 16).
+    \item $d_k$ is the dimension of each head (e.g., 128).
+    \item $d_{model}$ is the input hidden dimension (e.g., 2048).
+    \item \textbf{Each element $W_{QK}^{h,i}$ represents the $i$-th row vector of the QK projection matrix for head $h$.} It has size $d_{model}$.
+\end{itemize}
+
+The optimizer orthogonalizes the rows of this huge matrix.
+\begin{itemize}
+    \item \textbf{Constraint}: Every row (dimension of every head) is orthogonalized against every other row in the combined matrix.
+    \item \textbf{Effect}: This enforces a global diversity constraint across all $H \cdot d_k$ output dimensions simultaneously.
+\end{itemize}
+
+\textbf{Example ($H=2, d_k=2$):}
+Everything must be orthogonal to everything else. Each row is a weight vector of size $d_{model}$.
+
+\begin{table}[h]
+\centering
+\color{lighttext}
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+Matrix Row & Represents (Weight Vec) & Orthogonal to: & Meaning \\
+\midrule
+Row 1 & $W_{QK}^{1,1}$ & Row 2, 3, 4 & $W_{QK}^{1,1} \neq W_{QK}^{1,2}, W_{QK}^{2,1}$, etc. \\
+\textbf{Row 2} & $W_{QK}^{1,2}$ & Row 1, 3, 4 & Features within Head 1 orthogonal. \\
+\textbf{Row 3} & $W_{QK}^{2,1}$ & Row 1, 2, 4 & Head 2 orthogonal to Head 1. \\
+\textbf{Row 4} & $W_{QK}^{2,2}$ & Row 1, 2, 3 & Features within Head 2 orthogonal. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Visual Matrix ($4 \times d_{model}$):}
+$$
+G_{\text{base}} = 
+\begin{bmatrix}
+w_{1,1,1} & w_{1,1,2} & \dots & w_{1,1,D} \\
+w_{1,2,1} & w_{1,2,2} & \dots & w_{1,2,D} \\
+w_{2,1,1} & w_{2,1,2} & \dots & w_{2,1,D} \\
+w_{2,2,1} & w_{2,2,2} & \dots & w_{2,2,D}
+\end{bmatrix}
+\begin{matrix}
+\leftarrow W_{QK}^{1,1} \text{ (Head 1, Row 1)} \\
+\leftarrow W_{QK}^{1,2} \text{ (Head 1, Row 2)} \\
+\leftarrow W_{QK}^{2,1} \text{ (Head 2, Row 1)} \\
+\leftarrow W_{QK}^{2,2} \text{ (Head 2, Row 2)}
+\end{matrix}
+$$
+All 4 rows are orthogonalized against each other.
+
+\subsubsection*{1.2 Mode 1: Input-Shared Orthogonality (``HeadOrtho'')}
+We reshape the gradient to separate the ``head dimension'' from the ``feature dimension'' and orthogonalize the $d_k$ feature dimensions across a shared input space.
+$$G_{\text{mode1}} \in \mathbb{R}^{d_k \times (H \cdot d_{model})}$$
+\begin{itemize}
+    \item \textbf{Constraint}: The $i$-th feature dimension is orthogonalized against the $j$-th feature dimension, aggregating the vector across all heads.
+    \item \textbf{Structure}: This treats the $H$ heads as contributing to a single shared $d_k$-dimensional subspace. It does not enforce orthogonality \textit{between} different heads for the same feature dimension.
+\end{itemize}
+
+\textbf{Example ($H=2, d_k=2$):}
+We reshape to only 2 big rows ($d_k=2$). Each row is a \textit{concatenation} of the vectors for that feature row across all heads.
+
+\begin{table}[h]
+\centering
+\color{lighttext}
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+Matrix Row & Represents (Concat Vec) & Orthogonal to: & Meaning \\
+\midrule
+\textbf{Row 1} & $W_{QK}^{1,1} \oplus W_{QK}^{2,1}$ & Row 2 & Row 1 subspace $\perp$ Row 2 subspace. \\
+\textbf{Row 2} & $W_{QK}^{1,2} \oplus W_{QK}^{2,2}$ & Row 1 & \textbf{$W_{QK}^{1,1}$ and $W_{QK}^{2,1}$ can be identical.} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Visual Matrix ($2 \times 2 \cdot d_{model}$):}
+$$
+G_{\text{mode1}} = 
+\begin{bmatrix}
+\underbrace{w_{1,1,1} \dots w_{1,1,D}}_{W_{QK}^{1,1} \text{ (Head 1)}} & \mathbf{|} & \underbrace{w_{2,1,1} \dots w_{2,1,D}}_{W_{QK}^{2,1} \text{ (Head 2)}} \\
+\underbrace{w_{1,2,1} \dots w_{1,2,D}}_{W_{QK}^{1,2} \text{ (Head 1)}} & \mathbf{|} & \underbrace{w_{2,2,1} \dots w_{2,2,D}}_{W_{QK}^{2,2} \text{ (Head 2)}}
+\end{bmatrix}
+$$
+Only Top Row $\perp$ Bottom Row. Head 1 and Head 2 are just different columns in the same row vector!
+
+\subsubsection*{1.3 Mode 3: Inter-Head Orthogonality}
+We reshape to force heads to be orthogonal to each other.
+$$G_{\text{mode3}} \in \mathbb{R}^{H \times (d_k \cdot d_{model})}$$
+\begin{itemize}
+    \item \textbf{Constraint}: The gradient update vector for \texttt{Head i} is orthogonalized against \texttt{Head j}.
+    \item \textbf{Structure}: This specifically targets the independence of attention heads, treating each head as a unit vector in the parameter space.
+\end{itemize}
+
+\textbf{Example ($H=2, d_k=2$):}
+We reshape to only 2 big rows (one per Head, $H=2$). Each row is a \textit{concatenation} of all feature rows in that head.
+
+\begin{table}[h]
+\centering
+\color{lighttext}
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+Matrix Row & Represents (Concat Vec) & Orthogonal to: & Meaning \\
+\midrule
+\textbf{Row 1} & $W_{QK}^{1,1} \oplus W_{QK}^{1,2}$ & Row 2 & \textbf{Head 1 must be orthogonal to Head 2.} \\
+\textbf{Row 2} & $W_{QK}^{2,1} \oplus W_{QK}^{2,2}$ & Row 1 & Features within head can be anything (as long as $\perp$ H1). \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Visual Matrix ($2 \times 2 \cdot d_{model}$):}
+$$
+G_{\text{mode3}} = 
+\begin{bmatrix}
+\underbrace{w_{1,1,1} \dots w_{1,1,D}}_{W_{QK}^{1,1}} & \mathbf{|} & \underbrace{w_{1,2,1} \dots w_{1,2,D}}_{W_{QK}^{1,2}} \\
+\underbrace{w_{2,1,1} \dots w_{2,1,D}}_{W_{QK}^{2,1}} & \mathbf{|} & \underbrace{w_{2,2,1} \dots w_{2,2,D}}_{W_{QK}^{2,2}}
+\end{bmatrix}
+\begin{matrix}
+\leftarrow \text{Head 1 Parameters} \\
+\leftarrow \text{Head 2 Parameters}
+\end{matrix}
+$$
+Top Row (Head 1) $\perp$ Bottom Row (Head 2).
+
+\vspace{1em}
+
+\subsection*{2. Experimental Setup}
+
+To compare these modes, we conducted training runs using a $\sim$650M parameter Language Model.
+
+\subsubsection*{2.1 Model Architecture}
+\begin{itemize}
+    \item \textbf{Parameters}: $\sim$650 Million
+    \item \textbf{Layers}: 12
+    \item \textbf{Hidden Dimension ($d_{model}$)}: 2048
+    \item \textbf{Attention Heads}: 16 (with 8 KV heads for Grouped-Query Attention)
+    \item \textbf{Head Dimension ($d_k$)}: 128
+    \item \textbf{Sequence Length}: 2048
+\end{itemize}
+
+\subsubsection*{2.2 Training Configuration}
+\begin{itemize}
+    \item \textbf{Dataset}: SmolLM-corpus.
+    \item \textbf{Tokens Trained}: 300 Million.
+    \item \textbf{Batch Size}: 32 with gradient accumulation of 4 (Effective Batch Size $\sim$262k tokens).
+    \item \textbf{Optimizer}: Muon (for 2D parameters) + AdamW (for embeddings/\-normalization).
+    \item \textbf{Learning Rate}: Muon LR 0.05, AdamW LR 0.005.
+\end{itemize}
+
+\subsubsection*{2.3 Metrics Tracked}
+We monitor two primary metrics throughout training:
+\begin{enumerate}
+    \item \textbf{Training Loss}: Measuring the optimization efficiency.
+    \item \textbf{Participation Ratio (PR)}: Estimating the effective rank of the Key/Query projection matrices to quantify ``Rank Collapse'' versus strict orthogonality.
+\end{enumerate}
+
+\subsection*{3. Conclusion}
+
+As extensively plotted and discussed in the first section of this document, globally enforcing orthogonality (Baseline) artificially sustains projection matrix rank, briefly slowing start-of-training optimization. Relaxing this constraint allows natural correlations and structural groupings (Modes 1 \& 3), causing a massive rank drop but yielding an extremely fast initial loss descent. However, because the Baseline begins catching up as it utilizes its retained diversity, the true long-term optimal inductive bias remains an open question.
+
+\end{document}
