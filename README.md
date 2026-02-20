@@ -89,6 +89,25 @@ To regenerate plots from existing results: `python research_qk_collapse/split_pa
 
 ---
 
+## HeadOrtho Muon Experiment
+
+This experiment tests **Head-wise Tensor Orthogonalization** to improve model training, leveraging the finding that right singular vectors are highly aligned across heads.
+
+**→ Full write-up & easy explanations: [`research_head_ortho_simple/paper.md`](research_head_ortho_simple/paper.md)**  
+**→ PDF Version: [`English`](research_head_ortho_simple/paper.pdf) | [`Chinese`](research_head_ortho_simple/paper-ch.pdf)**
+
+### Run Experiment
+
+```bash
+# Runs the HeadOrtho variant (Mode-1)
+python new_research/head_orthogonal/run_experiment.py --experiment headortho
+```
+*(If you need a baseline comparison, run `--experiment all` instead)*
+
+Logs will print loss every ~50 steps. Results are saved to `new_research/head_orthogonal/results_{TIMESTAMP}/`.
+
+---
+
 ## License
 
 MIT
