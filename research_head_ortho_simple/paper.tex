@@ -56,7 +56,11 @@ Find more detailed explanation below.
 
 \subsection*{The Results}
 
-I tracked the Training Loss and the Participation Ratio (PR), which is a way to measure the ``effective rank'' of the Query and Key projection matrices. If PR stays high, the matrix is fully utilizing its diverse capacity (a lot of dimensions are away from 0). If PR drops, it means the representations are collapsing and correlating (some dimensions are close to 0).
+I tracked the Training Loss and the Participation Ratio (PR), which is a way to measure the ``effective rank'' of the Query and Key projection matrices. For a matrix with singular values $\sigma_i$, PR is calculated as:
+\begin{equation}
+\text{PR} = \frac{(\sum \sigma_i^2)^2}{\sum \sigma_i^4}
+\end{equation}
+If PR stays high, the matrix is fully utilizing its diverse capacity (a lot of dimensions are away from 0). If PR drops, it means the representations are collapsing and correlating (some dimensions are close to 0).
 
 We trained for 300 million tokens. \textit{(Note: This is too short for a full LLM, but provides strong initial signals while we scale up compute)}.
 

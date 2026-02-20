@@ -57,7 +57,11 @@
 
 \subsection*{结果 (The Results)}
 
-我追踪了训练损失 (Training Loss) 和参与率 (Participation Ratio, PR)，参与率是一种测量查询和键投影矩阵的“有效秩 (effective rank)”的方法。如果 PR 保持在高位，矩阵就充分利用了其多样化的容量 (许多维度都远离 0)。如果 PR 下降，意味着表示正在坍缩和变得相关 (某些维度接近 0)。
+我追踪了训练损失 (Training Loss) 和参与率 (Participation Ratio, PR)，参与率是一种测量查询和键投影矩阵的“有效秩 (effective rank)”的方法。对于具有奇异值 $\sigma_i$ 的矩阵，PR 的计算公式为：
+\begin{equation}
+\text{PR} = \frac{(\sum \sigma_i^2)^2}{\sum \sigma_i^4}
+\end{equation}
+如果 PR 保持在高位，矩阵就充分利用了其多样化的容量 (许多维度都远离 0)。如果 PR 下降，意味着表示正在坍缩和变得相关 (某些维度接近 0)。
 
 我们训练了 3 亿 (300 million) 个词元 (tokens)。\textit{（注：对于一个完整的 LLM 来说这太短了，但在我们扩大算力规模之前，它提供了强有力的初步信号）}。
 
