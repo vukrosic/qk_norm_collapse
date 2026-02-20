@@ -1,3 +1,50 @@
+# I Did 3 LLM Training Experiments on Attention Head Orthogonality 🧠
+
+I did 3 LLM training experiments: standard Muon vs Head Orthogonality modes (Input-Shared and Inter-Head). I wanted to see how different optimizer constraints affect the attention heads in a Transformer model.
+
+To give some background: The Muon optimizer fundamentally works by taking a matrix of gradients and forcing its rows to be orthogonal (mathematically perpendicular, meaning they are independent and non-overlapping). By creatively reshaping the gradient tensor before feeding it to Muon, we can change the definition of what a "row" is. We can control exactly *what* is forced to be independent from *what*.
+
+I tested this on the attention projections of a ~650M parameter model. The experiments specifically applied these head orthogonality constraints independently to both the **Query and Key projections ($W_Q$ and $W_K$)**, while letting the Value and Output projections train with standard global Muon. 
+
+Here are the 3 setups I compared:
+1. **Standard Muon (Baseline)**: Global orthogonality. Every single dimension of every single head must be independent from everything else. Maximum forced diversity.
+2. **Mode 1 (Input-Shared / HeadOrtho)**: Shared subspace. It forces the $i$-th feature dimension to be independent from the $j$-th feature dimension, but it allows identically-indexed features in *different heads* to be exactly the same. Heads can naturally align and collaborate.
+3. **Mode 3 (Inter-Head)**: Independent heads. Head 1 as a whole must be orthogonal to Head 2 as a whole. However, the features *within* a single head are free to be perfectly correlated.
+
+### The Results
+
+I tracked the Training Loss (optimization efficiency) and the Participation Ratio (PR), which is a way to measure the "effective rank" of the projection matrices. If PR stays high, the matrix is fully utilizing its diverse capacity. If PR drops, it means the representations are collapsing and correlating.
+
+![Loss and PR comparison up to 300M tokens](results_1b/comparison_300m_tokens.png)
+
+We trained these configurations on a C4-like pretraining corpus for about 300 million tokens. 
+*(Note: 300M tokens is not nearly enough for an LLM of this size. We are currently compute constrained, but I'm working to fix it for my future posts! However, this short-scale window still gives us very strong signals regarding optimization dynamics.)*
+
+#### Quantitative Results at 300M Tokens
+| Metric | **Mode 1 (Input-Shared)** | **Mode 3 (Inter-Head)** | **Baseline (Standard Muon)** |
+| :--- | :---: | :---: | :---: |
+| **Final Loss** | **3.073** | 3.100 | 3.096 |
+| **Final PR** | 31.6 | 26.1 | **57.2** |
+
+### What the Graphs and Table Tell Us
+
+If we analyze the data above, a few very clear (and somewhat deeply weird) behaviors emerge:
+
+**1. Muon is Very Good at Keeping Rank High (Forced Diversity)**
+* The **Baseline (cyan squares)** aggressively fights the model's natural tendency to simplify. By enforcing strict, massive-scale orthogonality across everything, standard Muon proves it is incredibly good at keeping the Participation Ratio high (~57.2). 
+* By comparison, when we relax the constraints within the heads (Mode 1 and Mode 3), the model happily throws away its diversity and experiences a devastating rank collapse: Mode 1's PR drops to ~31.6, and Mode 3 drops to ~26.1. 
+
+**2. It's Bizarre, but More Collapsed Heads Give Better Loss!**
+* Here is the kicker: despite undergoing a massive rank collapse, **Mode 1 achieves the lowest training loss** (3.073) and descends the fastest. 
+* It is weird and totally counter-intuitive! We often assume that preventing rank collapse and forcing diverse representations is objectively good for modern LLMs. But the Baseline, which enforces maximum diversity, struggles slightly over the same period (3.096) and flat-out loses to Mode 1.
+
+**The Takeaway**
+The 300M token runs suggest that strictly enforcing parameter-wide global orthogonality (Baseline) artificially sustains diversity at a slight cost to actual loss minimization. 
+
+Instead, relaxing the constraint to let heads naturally share representations across the same feature dimensions (Mode 1)—even though it causes a massive drop in matrix rank—yields a more favorable path for the optimizer. Sometimes, letting the network correlate exactly what it wants to correlate is the best move.
+
+---
+
 # Head Orthogonality in Muon Optimization: Experimental Setup
 
 ## Abstract
@@ -170,3 +217,31 @@ While the experiment is short-scale (10M tokens is <1% of typical pretraining), 
 *   **Mode 3**: initially maintained high rank but showed a trend of rank reduction in later steps.
 
 *Note: These results are from a limited training duration and should be interpreted as initial observations rather than conclusive evidence of long-term model behavior.*
+
+---
+
+## 4. Extended Training Results (~300M Tokens)
+
+To evaluate the constraints over a longer optimization trajectory, we extended the training to approximately 300 Million tokens.
+
+![Loss and PR comparison up to 300M tokens](results_1b/comparison_300m_tokens.png)
+
+### 4.1 Quantitative Results at 300M Tokens
+
+| Metric | **Mode 1 (Input-Shared)** | **Mode 3 (Inter-Head)** | **Baseline (Global)** |
+| :--- | :---: | :---: | :---: |
+| **Final Loss** | **3.073** | 3.100 | 3.096 |
+| **Final PR** | 31.6 | 26.1 | **57.2** |
+
+### 4.2 Analysis and Discussion
+
+1.  **Optimization Efficiency (Loss)**:
+    *   **Mode 1** achieves the lowest final loss (3.073) among the three constraints. By forcing the same feature dimension across heads to be an orthogonal unit (and allowing heads to align), we potentially align the optimizer's updates with a more natural parameter subspace.
+    *   **Baseline and Mode 3** converge to slightly higher final loss values (3.096 and 3.100 respectively). For Mode 3, strictly separating attention heads might prevent useful correlations between heads that improve learning efficiency.
+2.  **Effective Rank (Participation Ratio)**:
+    *   **The Baseline** successfully maintains a high matrix diversity (PR ~57.2). By making every row element orthogonal to every other element, it heavily resists the network's natural tendency toward rank collapse.
+    *   **Mode 1 and Mode 3** both demonstrate substantial rank collapse, settling at PRs of approximately 31.6 and 26.1, respectively. This confirms the hypotheses drawn from the dimensional constraints:
+        *   In **Mode 1**, since heads are horizontally stacked in the same subspace, they can share highly overlapping representations, allowing the rank to drop significantly compared to Baseline.
+        *   In **Mode 3**, although entire heads are strictly orthogonal to other heads, the raw features *within* a single head are free to be completely correlated. This leads to an even sharper reduction in rank.
+
+**Conclusion**: The extended 300M-token runs provide compelling evidence that enforcing parameter-wide global orthogonality (Baseline) artificially sustains a high projection matrix rank. By relaxing this constraint to allow structural groupings (Mode 1 and Mode 3), the network undergoes a clear rank collapse. Furthermore, since Mode 1 achieves the lowest loss despite significant rank drop, it suggests that allowing inter-head correlations—while maintaining input-feature diversity—may be a more favorable inductive bias than enforcing strict independence across all parameters.

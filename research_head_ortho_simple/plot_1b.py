@@ -35,9 +35,10 @@ def plot_1b_comparison():
     # Loss
     ax = axes[0]
     for mode, d in data.items():
-        if d["train_loss"]:
-            tokens = [t/1e6 for t in d["tokens"]]
-            ax.plot(tokens, d["train_loss"], color=colors[mode], linewidth=2, label=mode)
+            d_content = data[mode]
+            if "train_loss" in d_content:
+                tokens = [t/1e6 for t in d_content["tokens"]]
+                ax.plot(tokens, d_content["train_loss"], label=mode, linewidth=2)
     
     ax.set_xlabel('Tokens (Millions)')
     ax.set_ylabel('Training Loss')
@@ -47,9 +48,10 @@ def plot_1b_comparison():
     # PR
     ax = axes[1]
     for mode, d in data.items():
-        if d["mean_pr"]:
-            tokens = [t/1e6 for t in d["tokens"]]
-            ax.plot(tokens, d["mean_pr"], color=colors[mode], linewidth=2.5, label=mode)
+        d_content = data[mode]
+        if "mean_pr" in d_content:
+            tokens = [t/1e6 for t in d_content["tokens"]]
+            ax.plot(tokens, d_content["mean_pr"], label=mode, linewidth=2.5)
 
     ax.set_xlabel('Tokens (Millions)')
     ax.set_ylabel('Mean Participation Ratio')
