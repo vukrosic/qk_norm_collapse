@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from models.llm import MinimalLLM
 from configs.llm_config import LLMConfig
 from training.trainer import setup_muon_optimizer
-from research.svd_probe import RankProbe
+from svd_probe import RankProbe
 from data.loader import setup_tokenizer
 from configs.dataset_config import DataConfig
 from train_llm import prepare_datasets
