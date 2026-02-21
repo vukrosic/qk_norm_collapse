@@ -1,4 +1,6 @@
 # Wasted LLM training compute = better loss?
+### Research Progress Report
+**Vuk Rosić** ([vukrosic/qk_norm_collapse](https://github.com/vukrosic/qk_norm_collapse))
 
 ![Loss and PR comparison up to 300M tokens](results_1b/comparison_300m_tokens.png)
 
